@@ -5,6 +5,12 @@ function Vector3D:new(x, y, z)
     return setmetatable({x = x or 0.0, y = y or 0.0, z = z or 0.0}, Vector3D)
 end
 
+function Vector3D:set(x, y, z)
+    self.x = x
+    self.y = y
+    self.z = z
+end
+
 function Vector3D.__add(a, b)
     local x = a.x + b.x
     local y = a.y + b.y

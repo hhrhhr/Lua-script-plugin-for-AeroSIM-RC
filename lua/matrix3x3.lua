@@ -9,6 +9,12 @@ function Matrix3x3:new(xx, xy, xz, yx, yy, yz, zx, zy, zz)
     }, Matrix3x3)
 end
 
+function Matrix3x3:set(xx, xy, xz, yx, yy, yz, zx, zy, zz)
+    self[1][1] = xx; self[1][2] = xy; self[1][3] = xz
+    self[2][1] = yx; self[2][2] = yy; self[2][3] = yz
+    self[3][1] = zx; self[3][2] = zy; self[3][3] = zz
+end
+
 function Matrix3x3:map_vector(v)
     local x = v.x*self[1][1] + v.y*self[1][2] + v.z*self[1][3]
     local y = v.x*self[2][1] + v.y*self[2][2] + v.z*self[2][3]
