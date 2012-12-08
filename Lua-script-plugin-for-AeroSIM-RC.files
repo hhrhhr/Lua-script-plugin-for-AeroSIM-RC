@@ -1,0 +1,9 @@
+lua/main.lua
+lua/lib_matrix3x3.lua
+lua/lib_quaternion.lua
+lua/lib_vector3d.lua
+.gitignore
+Plugin.cpp
+Plugin.h
+README.md
+lua/mod_stabilizer.lua
