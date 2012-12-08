@@ -62,3 +62,4 @@ function Vector3D:scale(s)
 end
 
 setmetatable(Vector3D, {__call = Vector3D.new})
+

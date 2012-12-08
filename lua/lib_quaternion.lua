@@ -88,3 +88,4 @@ function Quaternion:scale(s)
 end
 
 setmetatable(Quaternion, {__call = Quaternion.new})
+
