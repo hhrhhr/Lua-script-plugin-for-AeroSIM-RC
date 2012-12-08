@@ -19,11 +19,8 @@ function angle_velocity_lock()
 
     for i = 1, 3 do
         local s = RX[servo[i]]
-
-        local err = curr[i] >= need[i]
         local adj = abs(curr[i] - need[i]) * 0.1
-
-        if err then
+        if curr[i] >= need[i] then
             s = s - adj
         else
             s = s + adj
