@@ -29,28 +29,13 @@ RX = {0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10}
 require("mod_stabilizer")
 
 -- main loop, called every frame
-function main(dt,
-              gx, gy, gz,
-              ax, ay, az,
-              lat, lon, alt, head,
-              ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9)
+function main()
+    -- calculate flight data
+    FD.time = FD.time + RAW.dt
 
--- fill sensors
-    RAW.dt = dt
-    RAW.gyro:set(gx, gy, gz)
-    RAW.acc:set(ax, ay, az)
-    RAW.gps.lat = lat
-    RAW.gps.lon = lon
-    RAW.gps.alt = alt
-    RAW.gps.head = head
-    TX = { ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9 }
-
--- calculate flight data
-    FD.time = FD.time + dt
-
+    -- example stabilizer
     angle_velocity_lock()
 
--- back to C
-    return FD.time, RX
+    -- back to C++
 end
 
