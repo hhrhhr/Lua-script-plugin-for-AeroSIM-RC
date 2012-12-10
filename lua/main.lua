@@ -47,7 +47,7 @@ function main()
     if TX[8] > 0.333 then
         angular_velocity_lock()
     elseif TX[8] < -0.333 then
-        local tmp = 0
+        angular_velocity_dt_lock()
     else
         -- just bypass
         MX[1] = TX[1]
