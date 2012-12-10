@@ -23,19 +23,42 @@ FD = {
     att = { roll = 0.0, pitch = 0.0, yaw = 0.0 }
 }
 
+-- mixer
+MX = {0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10}
+
 -- reciever
 RX = {0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10}
 
+-- debug string
+DBG = {}
+DBGSTR = ""
+
 require("mod_stabilizer")
+require("mod_actuator")
 
 -- main loop, called every frame
 function main()
+    DBG = {}
+
     -- calculate flight data
     FD.time = FD.time + RAW.dt
 
     -- example stabilizer
-    angle_velocity_lock()
+    if TX[8] > 0.333 then
+        angular_velocity_lock()
+    elseif TX[8] < -0.333 then
+        local tmp = 0
+    else
+        -- just bypass
+        MX[1] = TX[1]
+        MX[2] = TX[2]
+        MX[4] = TX[4]
+    end
+
+    -- example actuator
+    process_actuator()
 
     -- back to C++
+    DBGSTR = table.concat(DBG)
 end
 

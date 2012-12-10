@@ -7,10 +7,16 @@
 #include <math.h>
 
 // Custom Menu Item masks
-#define MASK_MENU_ITEM__COMMAND_RESET               (1 <<  0)
+#define MASK_MENU_ITEM__COMMAND_RESET   (1 <<  0)
+#define MASK_MENU_ITEM__COMMAND_1       (1 <<  1)
+#define MASK_MENU_ITEM__COMMAND_2       (1 <<  2)
+#define MASK_MENU_ITEM__COMMAND_3       (1 <<  3)
+#define MASK_MENU_ITEM__COMMAND_4       (1 <<  4)
 
 bool g_bFirstRun = true;            // Used to initialise menu checkboxes showing OSD with HUD
 char g_strDebugInfo[10000] = "";    // static to remain in memory when function exits
+char g_luaDebugInfo[1024] = "";
+char g_lua2DebugInfo[1024] = "";
 char g_strPluginFolder[MAX_PATH];
 char g_strOutputFolder[MAX_PATH];
 
@@ -54,6 +60,30 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_ReportStructSizes(
     *pnSizeOf_TPluginInit        = sizeof(TPluginInit       );
 }
 
+// Lua errors handler --------------------------------------------------------
+int errorHandler(lua_State* L)
+{
+    //stack: err
+    const char* err = lua_tostring(L, 1);
+    sprintf(g_luaDebugInfo,
+            "Error code: %s\n", err);
+
+    lua_getglobal(L, "debug"); // stack: err debug
+    lua_getfield(L, -1, "traceback"); // stack: err debug debug.traceback
+
+    // debug.traceback() return 1 value
+    if(lua_pcall(L, 0, 1, 0)) {
+        const char* err = lua_tostring(L, -1);
+        sprintf(g_luaDebugInfo + strlen(g_luaDebugInfo),
+                "Error in debug.traceback() call: %s\n", err);
+    } else {
+        const char* stackTrace = lua_tostring(L, -1);
+        sprintf(g_luaDebugInfo + strlen(g_luaDebugInfo),
+                "C++ stack traceback: %s\n", stackTrace);
+    }
+
+    return 1;
+}
 
 //-----------------------------------------------------------------------------
 AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Init(TPluginInit *ptPluginInit)
@@ -63,14 +93,16 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Init(TPluginInit *ptPluginInit)
     strcpy(g_strOutputFolder, ptPluginInit->strOutputFolder);
 
     L = luaL_newstate();
-    luaL_openlibs(L); /* Load Lua libraries */
+    luaL_openlibs(L);
+
+    lua_pushcfunction(L, errorHandler);
 
     char strFullScriptName[MAX_PATH];
     strcpy(strFullScriptName, g_strPluginFolder);
     strcat(strFullScriptName, "\\lua\\main.lua");
     luaL_loadfile(L, strFullScriptName);
 
-    // send package.path
+    // set package.path
     char luaPackagePath[MAX_PATH];
     strcpy(luaPackagePath, g_strPluginFolder);
     strcat(luaPackagePath, "\\lua\\?.lua");
@@ -80,7 +112,9 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Init(TPluginInit *ptPluginInit)
     lua_setfield(L, -2, "path");
     lua_pop(L, 1);
 
-    lua_pcall(L, 0, 0, 0);
+    // first call of script
+    lua_pcall(L, 0, 0, -2);
+    lua_pop(L, 1);
 }
 
 //-----------------------------------------------------------------------------
@@ -94,19 +128,24 @@ void InfoText(const TDataFromAeroSimRC *ptDataFromAeroSimRC,
               TDataToAeroSimRC *ptDataToAeroSimRC)
 {
     sprintf(g_strDebugInfo,
+            "LUA_ERROR:\n%s\n"
             "----------------------------------------------------------------------\n"
             "Plugin Folder = %s\n"
             "Output Folder = %s\n"
             "\nSimulation Data\n" // Simulation Data
             "fIntegrationTimeStep = %f\n"
-            "gyro = %f, %f, %f\n"
-            "acc = %f, %f, %f\n"
+            "gyro = % 2.6f, % 2.6f, % 2.6f\n"
+            "acc  = % 2.6f, % 2.6f, % 2.6f\n"
             "lat = %f, lon = %f, alt = %f, heading = %f\n"
             "TX = (%+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f)\n"
             "\nfrom Lua\n" // from Lua
             "Flight time = %f\n"
             "RX = (%+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f)\n"
+            "\nLua dbg\n"
+            "%s\n"
             ,
+            g_luaDebugInfo,
+
             g_strPluginFolder,
             g_strOutputFolder,
 
@@ -134,7 +173,9 @@ void InfoText(const TDataFromAeroSimRC *ptDataFromAeroSimRC,
 
             // from Lua
             fligthTime,
-            rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7], rx[8], rx[9]
+            rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7], rx[8], rx[9],
+
+            g_lua2DebugInfo
             );
 }
 
@@ -153,6 +194,10 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Run(const TDataFromAeroSimRC *ptDataF
 
     // Extract Menu Commands from Flags
     bool bCommand_Reset = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_RESET) != 0;
+    bool bCommand_1     = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_1) != 0;
+    bool bCommand_2     = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_2) != 0;
+    bool bCommand_3     = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_3) != 0;
+    bool bCommand_4     = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_4) != 0;
 
     if(g_bFirstRun) {
         //
@@ -165,7 +210,14 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Run(const TDataFromAeroSimRC *ptDataF
     // Run commands
     if(bCommand_Reset) {
         Run_Command_Reset(ptDataFromAeroSimRC, ptDataToAeroSimRC);
-
+    } else if (bCommand_1) {
+        //
+    } else if (bCommand_2) {
+        //
+    } else if (bCommand_3) {
+        //
+    } else if (bCommand_4) {
+        //
     } else {
         //  prepare vars ---------------------------------------------------------------------------
         dt = ptDataFromAeroSimRC->Simulation_fIntegrationTimeStep;
@@ -183,6 +235,7 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Run(const TDataFromAeroSimRC *ptDataF
         acc[1] += ptDataFromAeroSimRC->Model_fAccel_Body_Y;
         acc[2] += ptDataFromAeroSimRC->Model_fAccel_Body_Z;
 
+        // gps is updated at ~5Hz
         static float gps_dt = 0.0;
         if (gps_dt < 0.2) {
             gps_dt += ptDataFromAeroSimRC->Simulation_fIntegrationTimeStep;
@@ -316,37 +369,44 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Run(const TDataFromAeroSimRC *ptDataF
         }
         lua_pop(L, 1);
 
-        /* 0 params, 2 returned value */
         // call 'main' function --------------------------------------------------------------------
-        int retn = 2;
+        lua_pushcfunction(L, errorHandler);
         lua_getglobal(L, "main");
-        lua_pcall(L, 0, retn, 0);
-
-        // get values from Lua ---------------------------------------------------------------------
-        i = -retn;
-        fligthTime = lua_tonumber(L, i++);
-
-        lua_pushnil(L);
-        for (int j = 0; j < 10; j++) {
-            lua_next(L, -2);
-            //lua_tointeger(L, -2); // key not needed
-            rx[j] = lua_tonumber(L, -1);
-            lua_pop(L, 1);
-        }
+        int result = lua_pcall(L, 0, 0, -2);
         lua_pop(L, 1);
 
-        // var = lua_tonumber(L, i++);
-        // ...
-        lua_pop(L, -retn);
+        if (!result) {
+            strcpy(g_luaDebugInfo, "all OK");
+            // get values from Lua -----------------------------------------------------------------
+            lua_getglobal(L, "FD");
+            {
+                lua_pushstring(L, "time");
+                lua_rawget(L, -2);
+                fligthTime = lua_tonumber(L, -1);
+                lua_pop(L, 1);
+            }
+            lua_pop(L, 1);
 
-        ptDataToAeroSimRC->Channel_abOverride_RX[CH_AILERON]  = true;
-        ptDataToAeroSimRC->Channel_afNewValue_RX[CH_AILERON]  = rx[0];
-        ptDataToAeroSimRC->Channel_abOverride_RX[CH_ELEVATOR] = true;
-        ptDataToAeroSimRC->Channel_afNewValue_RX[CH_ELEVATOR] = rx[1];
-        ptDataToAeroSimRC->Channel_abOverride_RX[CH_RUDDER]   = true;
-        ptDataToAeroSimRC->Channel_afNewValue_RX[CH_RUDDER]   = rx[3];
+            lua_getglobal(L, "RX");
+            for (int i = 0; i < 10; i++) {
+                lua_rawgeti(L, -1, i+1);
+                rx[i] = lua_tonumber(L, -1);
+                lua_pop(L, 1);
+            }
+            lua_pop(L, 1);
+
+            lua_getglobal(L, "DBGSTR");
+            strcpy(g_lua2DebugInfo, lua_tostring(L, -1));
+            lua_pop(L, 1);
+
+            ptDataToAeroSimRC->Channel_abOverride_RX[CH_AILERON]  = true;
+            ptDataToAeroSimRC->Channel_afNewValue_RX[CH_AILERON]  = rx[0];
+            ptDataToAeroSimRC->Channel_abOverride_RX[CH_ELEVATOR] = true;
+            ptDataToAeroSimRC->Channel_afNewValue_RX[CH_ELEVATOR] = rx[1];
+            ptDataToAeroSimRC->Channel_abOverride_RX[CH_RUDDER]   = true;
+            ptDataToAeroSimRC->Channel_afNewValue_RX[CH_RUDDER]   = rx[3];
+        }
     }
-
     //-----------------------------------
 }
 

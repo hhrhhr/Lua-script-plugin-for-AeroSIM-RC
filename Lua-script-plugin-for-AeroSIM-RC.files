@@ -7,3 +7,5 @@ Plugin.cpp
 Plugin.h
 README.md
 lua/mod_stabilizer.lua
+script.cpp
+lua/mod_actuator.lua
