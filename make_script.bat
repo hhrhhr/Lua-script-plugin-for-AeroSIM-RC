@@ -8,3 +8,5 @@ set path=%path%;%_MINGW%
 
 g++ -Wall -static -o script.exe script.cpp -I../luajit-2.0/src -L../luajit-2.0/src -lluajit
 
+:eof
+pause

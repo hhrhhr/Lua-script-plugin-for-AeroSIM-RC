@@ -363,7 +363,7 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_ReportStructSizes(
 // Used to optionally define menu items in the top menu bar.
 // Also used to initialise the plugin (e.g. loading data files)
 
-AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Init(TPluginInit *pTPluginInit);
+AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Init(const TPluginInit *pTPluginInit);
 
 
 // This is the  *HEART*  of the plugin. It is called every simulation cycle.

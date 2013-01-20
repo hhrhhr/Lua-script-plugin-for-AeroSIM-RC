@@ -7,11 +7,8 @@
 #include <math.h>
 
 // Custom Menu Item masks
-#define MASK_MENU_ITEM__COMMAND_RESET   (1 <<  0)
-#define MASK_MENU_ITEM__COMMAND_1       (1 <<  1)
-#define MASK_MENU_ITEM__COMMAND_2       (1 <<  2)
-#define MASK_MENU_ITEM__COMMAND_3       (1 <<  3)
-#define MASK_MENU_ITEM__COMMAND_4       (1 <<  4)
+#define MASK_MENU_ITEM__COMMAND_RELOAD_LUA_SCRIPTS  (1 << 0)
+#define MASK_MENU_ITEM__COMMAND_WINDOW_SIZE_AND_POS (1 << 1)
 
 bool g_bFirstRun = true;            // Used to initialise menu checkboxes showing OSD with HUD
 char g_strDebugInfo[10000] = "";    // static to remain in memory when function exits
@@ -22,13 +19,7 @@ char g_strOutputFolder[MAX_PATH];
 
 //
 lua_State *L;
-float fligthTime = 0.0;
-float dt = 0.0;
-float gyro[3] = { 0.0, 0.0, 0.0 };
-float acc[3] = { 0.0, 0.0, 0.0 };
-double gpsd[2] = { 0.0, 0.0 };
-float gpsf[2] = { 0.0, 0.0 };
-float rx[10] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+float acc[3];
 
 //-----------------------------------------------------------------------------
 BOOL APIENTRY DllMain( HANDLE hModule,
@@ -85,12 +76,10 @@ int errorHandler(lua_State* L)
     return 1;
 }
 
-//-----------------------------------------------------------------------------
-AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Init(TPluginInit *ptPluginInit)
+void Lua_Init()
 {
-    // Save paths for later use
-    strcpy(g_strPluginFolder, ptPluginInit->strPluginFolder);
-    strcpy(g_strOutputFolder, ptPluginInit->strOutputFolder);
+    if (!g_bFirstRun)
+        lua_close(L);
 
     L = luaL_newstate();
     luaL_openlibs(L);
@@ -118,36 +107,57 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Init(TPluginInit *ptPluginInit)
 }
 
 //-----------------------------------------------------------------------------
-void Run_Command_Reset(const TDataFromAeroSimRC *ptDataFromAeroSimRC,
-                       TDataToAeroSimRC *ptDataToAeroSimRC)
+AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Init(const TPluginInit *ptPluginInit)
 {
-    sprintf(g_strDebugInfo + strlen(g_strDebugInfo), "\nRESET");
+    // Save paths for later use
+    strcpy(g_strPluginFolder, ptPluginInit->strPluginFolder);
+    strcpy(g_strOutputFolder, ptPluginInit->strOutputFolder);
+
+    Lua_Init();
 }
+
+//-----------------------------------------------------------------------------
+void Run_Command_WindowSizeAndPos(const TDataFromAeroSimRC *ptDataFromAeroSimRC,
+                                  TDataToAeroSimRC *ptDataToAeroSimRC)
+{
+    short x = 0, y = 0, w = -1, h = -1;
+
+    lua_getglobal(L, "next_resolution");
+    lua_pcall(L, 0, 4, 0);
+    x = lua_tointeger(L, 1);
+    y = lua_tointeger(L, 2);
+    w = lua_tointeger(L, 3);
+    h = lua_tointeger(L, 4);
+    lua_pop(L, 4);
+
+    if (w == -1)
+        w = ptDataFromAeroSimRC->Win_nScreenSizeDX;
+    if (h == -1)
+        h = ptDataFromAeroSimRC->Win_nScreenSizeDY;
+
+    ptDataToAeroSimRC->Win_nNewPosX   = x;
+    ptDataToAeroSimRC->Win_nNewPosY   = y;
+    ptDataToAeroSimRC->Win_nNewSizeDX = w;
+    ptDataToAeroSimRC->Win_nNewSizeDY = h;
+}
+
 
 void InfoText(const TDataFromAeroSimRC *ptDataFromAeroSimRC,
               TDataToAeroSimRC *ptDataToAeroSimRC)
 {
     sprintf(g_strDebugInfo,
-            "LUA_ERROR:\n%s\n"
-            "----------------------------------------------------------------------\n"
-            "Plugin Folder = %s\n"
-            "Output Folder = %s\n"
-            "\nSimulation Data\n" // Simulation Data
+            "LUA_ERROR: %s\n"
+
+            "\n--- simulation data ---\n"
             "fIntegrationTimeStep = %f\n"
             "gyro = % 2.6f, % 2.6f, % 2.6f\n"
             "acc  = % 2.6f, % 2.6f, % 2.6f\n"
-            "lat = %f, lon = %f, alt = %f, heading = %f\n"
-            "TX = (%+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f)\n"
-            "\nfrom Lua\n" // from Lua
-            "Flight time = %f\n"
-            "RX = (%+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f %+1.4f)\n"
-            "\nLua dbg\n"
+            "lat = %f, lon = %f, alt = %.2f\n"
+
+            "\n--- from Lua ---\n"
             "%s\n"
             ,
             g_luaDebugInfo,
-
-            g_strPluginFolder,
-            g_strOutputFolder,
 
             // Simulation Data
             ptDataFromAeroSimRC->Simulation_fIntegrationTimeStep,
@@ -158,23 +168,11 @@ void InfoText(const TDataFromAeroSimRC *ptDataFromAeroSimRC,
 
             acc[0], acc[1], acc[2],
 
-            gpsd[0], gpsd[1], gpsf[0], gpsf[1],
-
-            ptDataFromAeroSimRC->Channel_afValue_TX[CH_AILERON],
-            ptDataFromAeroSimRC->Channel_afValue_TX[CH_ELEVATOR],
-            ptDataFromAeroSimRC->Channel_afValue_TX[CH_THROTTLE],
-            ptDataFromAeroSimRC->Channel_afValue_TX[CH_RUDDER],
-            ptDataFromAeroSimRC->Channel_afValue_TX[CH_5],
-            ptDataFromAeroSimRC->Channel_afValue_TX[CH_6],
-            ptDataFromAeroSimRC->Channel_afValue_TX[CH_7],
-            ptDataFromAeroSimRC->Channel_afValue_TX[CH_PLUGIN_1],
-            ptDataFromAeroSimRC->Channel_afValue_TX[CH_PLUGIN_2],
-
+            ptDataFromAeroSimRC->Model_fLatitude,
+            ptDataFromAeroSimRC->Model_fLongitude,
+            ptDataFromAeroSimRC->Model_fPosZ,
 
             // from Lua
-            fligthTime,
-            rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7], rx[8], rx[9],
-
             g_lua2DebugInfo
             );
 }
@@ -193,11 +191,8 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Run(const TDataFromAeroSimRC *ptDataF
     ptDataToAeroSimRC->Menu_nFlags_MenuItem_New_CheckBox_Status = ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status;
 
     // Extract Menu Commands from Flags
-    bool bCommand_Reset = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_RESET) != 0;
-    bool bCommand_1     = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_1) != 0;
-    bool bCommand_2     = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_2) != 0;
-    bool bCommand_3     = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_3) != 0;
-    bool bCommand_4     = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_4) != 0;
+    bool bCommand_ReloadLuaScripts = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_RELOAD_LUA_SCRIPTS) != 0;
+    bool bCommand_WindowSizeAndPos = (ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status & MASK_MENU_ITEM__COMMAND_WINDOW_SIZE_AND_POS) != 0;
 
     if(g_bFirstRun) {
         //
@@ -208,24 +203,11 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Run(const TDataFromAeroSimRC *ptDataF
     ptDataToAeroSimRC->Model_nOverrideFlags = 0;
 
     // Run commands
-    if(bCommand_Reset) {
-        Run_Command_Reset(ptDataFromAeroSimRC, ptDataToAeroSimRC);
-    } else if (bCommand_1) {
-        //
-    } else if (bCommand_2) {
-        //
-    } else if (bCommand_3) {
-        //
-    } else if (bCommand_4) {
-        //
+    if (bCommand_ReloadLuaScripts) {
+        Lua_Init();
+    } else if (bCommand_WindowSizeAndPos) {
+        Run_Command_WindowSizeAndPos(ptDataFromAeroSimRC, ptDataToAeroSimRC);
     } else {
-        //  prepare vars ---------------------------------------------------------------------------
-        dt = ptDataFromAeroSimRC->Simulation_fIntegrationTimeStep;
-
-        gyro[0] = ptDataFromAeroSimRC->Model_fAngVel_Body_X;
-        gyro[1] = ptDataFromAeroSimRC->Model_fAngVel_Body_Y;
-        gyro[2] = ptDataFromAeroSimRC->Model_fAngVel_Body_Z;
-
         // rotate gravity (0.0, 0.0, -9.81) to model
         acc[0] = -9.81 * ptDataFromAeroSimRC->Model_fAxisRight_Z;
         acc[1] = -9.81 * ptDataFromAeroSimRC->Model_fAxisFront_Z;
@@ -235,53 +217,33 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Run(const TDataFromAeroSimRC *ptDataF
         acc[1] += ptDataFromAeroSimRC->Model_fAccel_Body_Y;
         acc[2] += ptDataFromAeroSimRC->Model_fAccel_Body_Z;
 
-        // gps is updated at ~5Hz
-        static float gps_dt = 0.0;
-        if (gps_dt < 0.2) {
-            gps_dt += ptDataFromAeroSimRC->Simulation_fIntegrationTimeStep;
-        } else {
-            gps_dt = 0.0;
-            double lat = ptDataFromAeroSimRC->Model_fLatitude;
-            double lon = ptDataFromAeroSimRC->Model_fLongitude;
-            if ( (fabs(lat - gpsd[0]) > 0.0000001) or (fabs(lon - gpsd[1]) > 0.0000001) ) {
-                double lat1 = gpsd[0]   * M_PI / 180.0;
-                double lat2 = lat       * M_PI / 180.0;
-                double lon1 = gpsd[1]   * M_PI / 180.0;
-                double lon2 = lon       * M_PI / 180.0;
-                double dLon = lon2 - lon1;
-                double y = sin(dLon) * cos(lat2);
-                double x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon);
-                float head = atan2(y, x) * 180.0 / M_PI;
-
-                gpsd[0] = lat;
-                gpsd[1] = lon;
-                gpsf[0] = ptDataFromAeroSimRC->Model_fPosZ;
-                gpsf[1] = head;
-            }
-        };
-
         // set global tables in Lua ----------------------------------------------------------------
         lua_getglobal(L, "RAW");
         {
+            /* menu */
+            lua_pushstring(L, "menu");
+            lua_pushinteger(L, ptDataFromAeroSimRC->Menu_nFlags_MenuItem_Status);
+            lua_rawset(L, -3);
+
             /* dt*/
             lua_pushstring(L, "dt");
-            lua_pushnumber(L, dt);
+            lua_pushnumber(L, ptDataFromAeroSimRC->Simulation_fIntegrationTimeStep);
             lua_rawset(L, -3);
 
             /* model gyro */
-            lua_pushstring(L, "gyro");
+            lua_pushstring(L, "gyr");
             lua_gettable(L, -2);
             {
                 lua_pushstring(L, "x");
-                lua_pushnumber(L, gyro[0]);
+                lua_pushnumber(L, ptDataFromAeroSimRC->Model_fAngVel_Body_X);
                 lua_rawset(L, -3);
 
                 lua_pushstring(L, "y");
-                lua_pushnumber(L, gyro[1]);
+                lua_pushnumber(L, ptDataFromAeroSimRC->Model_fAngVel_Body_Y);
                 lua_rawset(L, -3);
 
                 lua_pushstring(L, "z");
-                lua_pushnumber(L, gyro[2]);
+                lua_pushnumber(L, ptDataFromAeroSimRC->Model_fAngVel_Body_Z);
                 lua_rawset(L, -3);
             }
             lua_pop(L, 1);
@@ -304,67 +266,43 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Run(const TDataFromAeroSimRC *ptDataF
             }
             lua_pop(L, 1);
 
-            /* lat/lon/alt/head */
+            /* lat/lon/alt */
             lua_pushstring(L, "gps");
             lua_gettable(L, -2);
             {
                 lua_pushstring(L, "lat");
-                lua_pushnumber(L, gpsd[0]);
+                lua_pushnumber(L, ptDataFromAeroSimRC->Model_fLatitude);
                 lua_rawset(L, -3);
 
                 lua_pushstring(L, "lon");
-                lua_pushnumber(L, gpsd[1]);
+                lua_pushnumber(L, ptDataFromAeroSimRC->Model_fLongitude);
                 lua_rawset(L, -3);
 
                 lua_pushstring(L, "alt");
-                lua_pushnumber(L, gpsf[0]);
-                lua_rawset(L, -3);
-
-                lua_pushstring(L, "head");
-                lua_pushnumber(L, gpsf[1]);
+                lua_pushnumber(L, ptDataFromAeroSimRC->Model_fPosZ);
                 lua_rawset(L, -3);
             }
             lua_pop(L, 1);
         }
         lua_pop(L, 1);
 
-        int i = 1;
         lua_getglobal(L, "TX");
-        {
-            lua_pushinteger(L, i++);
-            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[CH_AILERON]);
+        for (int i = 0; i < AEROSIMRC_MAX_CHANNELS; i++) {
+            lua_pushinteger(L, i+1);
+            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[i]);
             lua_rawset(L, -3);
+        }
+        lua_pop(L, 1);
 
-            lua_pushinteger(L, i++);
-            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[CH_ELEVATOR]);
-            lua_rawset(L, -3);
+//float Model_fAxisRight_X; float Model_fAxisRight_Y; float Model_fAxisRight_Z;
+//float Model_fAxisFront_X; float Model_fAxisFront_Y; float Model_fAxisFront_Z;
+//float Model_fAxisUp_X;    float Model_fAxisUp_Y;    float Model_fAxisUp_Z;
 
-            lua_pushinteger(L, i++);
-            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[CH_THROTTLE]);
-            lua_rawset(L, -3);
-
-            lua_pushinteger(L, i++);
-            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[CH_RUDDER]);
-            lua_rawset(L, -3);
-
-            lua_pushinteger(L, i++);
-            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[CH_5]);
-            lua_rawset(L, -3);
-
-            lua_pushinteger(L, i++);
-            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[CH_6]);
-            lua_rawset(L, -3);
-
-            lua_pushinteger(L, i++);
-            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[CH_7]);
-            lua_rawset(L, -3);
-
-            lua_pushinteger(L, i++);
-            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[CH_PLUGIN_1]);
-            lua_rawset(L, -3);
-
-            lua_pushinteger(L, i++);
-            lua_pushnumber(L, ptDataFromAeroSimRC->Channel_afValue_TX[CH_PLUGIN_2]);
+        lua_getglobal(L, "M");
+        const float *p = &ptDataFromAeroSimRC->Model_fAxisRight_X;
+        for (int i = 0; i < 9; i++) {
+            lua_pushinteger(L, i+1);
+            lua_pushnumber(L, p[i]);
             lua_rawset(L, -3);
         }
         lua_pop(L, 1);
@@ -375,36 +313,22 @@ AeroSIMRC_DLL_EXPORT void AeroSIMRC_Plugin_Run(const TDataFromAeroSimRC *ptDataF
         int result = lua_pcall(L, 0, 0, -2);
         lua_pop(L, 1);
 
+        // get values from Lua ---------------------------------------------------------------------
         if (!result) {
-            strcpy(g_luaDebugInfo, "all OK");
-            // get values from Lua -----------------------------------------------------------------
-            lua_getglobal(L, "FD");
-            {
-                lua_pushstring(L, "time");
-                lua_rawget(L, -2);
-                fligthTime = lua_tonumber(L, -1);
-                lua_pop(L, 1);
-            }
-            lua_pop(L, 1);
-
-            lua_getglobal(L, "RX");
-            for (int i = 0; i < 10; i++) {
-                lua_rawgeti(L, -1, i+1);
-                rx[i] = lua_tonumber(L, -1);
-                lua_pop(L, 1);
-            }
-            lua_pop(L, 1);
+            strcpy(g_luaDebugInfo, "no errors");
 
             lua_getglobal(L, "DBGSTR");
             strcpy(g_lua2DebugInfo, lua_tostring(L, -1));
             lua_pop(L, 1);
 
-            ptDataToAeroSimRC->Channel_abOverride_RX[CH_AILERON]  = true;
-            ptDataToAeroSimRC->Channel_afNewValue_RX[CH_AILERON]  = rx[0];
-            ptDataToAeroSimRC->Channel_abOverride_RX[CH_ELEVATOR] = true;
-            ptDataToAeroSimRC->Channel_afNewValue_RX[CH_ELEVATOR] = rx[1];
-            ptDataToAeroSimRC->Channel_abOverride_RX[CH_RUDDER]   = true;
-            ptDataToAeroSimRC->Channel_afNewValue_RX[CH_RUDDER]   = rx[3];
+            lua_getglobal(L, "RX");
+            for (int i = 0; i < AEROSIMRC_MAX_CHANNELS; i++) {
+                lua_rawgeti(L, -1, i+1);
+                ptDataToAeroSimRC->Channel_abOverride_RX[i] = true;
+                ptDataToAeroSimRC->Channel_afNewValue_RX[i] = lua_tonumber(L, -1);
+                lua_pop(L, 1);
+            }
+            lua_pop(L, 1);
         }
     }
     //-----------------------------------

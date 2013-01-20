@@ -1,64 +1,98 @@
--- main.lua
-require("lib_vector3d")
-require("lib_matrix3x3")
-require("lib_quaternion")
+require("plugin_config")
+require("libraries")
 
--- sensors data
+-- data from simulator
 RAW = {
+    menu = 0,
     dt = 0.0,
-    gyro = Vector3D(),
+    gyr = Vector3D(),
     acc = Vector3D(),
-    gps = { lat = 0.0, lon = 0.0, alt = 0.0, head = 0.0 }
+    gps = { lat = 0.0, lon = 0.0, alt = 0.0 }
 }
+TX = {}
+M = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }
 
--- transmitter (joystick)
-TX = {-0.11, -0.22, -0.33, -0.44, -0.55, -0.66, -0.77, -0.88, -0.99}
+-- output data
+RX = {}
+DBGSTR = ""
 
--- fligth data
+-- work data
+MX = {}     -- mixer
+DBG = {}    -- debug strings buffer
+
+-- init tables
+for i = 1, 39 do
+    table.insert(TX, 0.0)
+    table.insert(MX, 0.0)
+    table.insert(RX, 0.0)
+end
+
+require("modules")
+
+-- put your structs here -------------------------------------------------\
+
 FD = {
-    time = 0,
+    time = 0.0,
+    menu = { false, false, false, false },
     mat = Matrix3x3(),
     quat = Quaternion(),
     pos = Vector3D(),
+    vel = Vector3D(),
     att = { roll = 0.0, pitch = 0.0, yaw = 0.0 }
 }
 
--- mixer
-MX = {0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10}
+-- end of user code ------------------------------------------------------/
 
--- reciever
-RX = {0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10}
-
--- debug string
-DBG = {}
-DBGSTR = ""
-
-require("mod_stabilizer")
-require("mod_actuator")
-
--- main loop, called every frame
-function main()
+function main()     -- main loop, called every frame
     DBG = {}
+    parse_menu()
+    correct_sensors()
 
-    -- calculate flight data
+-- put your code here ----------------------------------------------------\
+
+    dbg("menu: %4d (%5s, %5s, %5s, %5s)",
+        RAW.menu, FD.menu[1], FD.menu[2], FD.menu[3], FD.menu[4])
+
     FD.time = FD.time + RAW.dt
+    dbg("time: %f", FD.time)
 
-    -- example stabilizer
-    if TX[8] > 0.333 then
+    dbg("gyr x:% 10.6f, y:% 10.6f, z:% 10.6f", RAW.gyr.x, RAW.gyr.y, RAW.gyr.z)
+    dbg("acc x:% 10.6f, y:% 10.6f, z:% 10.6f", RAW.acc.x, RAW.acc.y, RAW.acc.z)
+    dbg("lat: % f, lon: % f", RAW.gps.lat, RAW.gps.lon)
+    dbg("alt: %.2f head: %.2f", RAW.gps.alt, RAW.gps.head)
+
+    -- pre mixer
+    for i = 1, 39 do
+        MX[i] = TX[i]
+    end
+
+    calculate_attitude_matrix()
+    dbg("matrix RPY: % 7.2f, % 7.2f, % 7.2f", FD.att.roll, FD.att.pitch, FD.att.yaw)
+
+    calculate_attitude_quat()
+    dbg("  quat RPY: % 7.2f, % 7.2f, % 7.2f", FD.att.roll, FD.att.pitch, FD.att.yaw)
+
+    calculate_attitude_raw()
+    dbg("   raw RPY: % 7.2f, % 7.2f, % 7.2f", FD.att.roll, FD.att.pitch, FD.att.yaw)
+
+    MadgwickAHRSupdateIMU()
+    dbg("\n!!AHRS RPY: % 7.2f, % 7.2f, % 7.2f\n", FD.att.roll, FD.att.pitch, FD.att.yaw)
+
+
+    -- TX[23] - Plugin channel 1
+    if TX[23] > 0.333 then          -- function #1
         angular_velocity_lock()
-    elseif TX[8] < -0.333 then
-        angular_velocity_dt_lock()
-    else
-        -- just bypass
-        MX[1] = TX[1]
-        MX[2] = TX[2]
-        MX[4] = TX[4]
+    elseif TX[23] > -0.333 then     -- function #2
+        null_function()
+    else                            -- function #3
+        null_function()
     end
 
     -- example actuator
     process_actuator()
 
-    -- back to C++
+-- end of user code ------------------------------------------------------/
+
     DBGSTR = table.concat(DBG)
 end
 
