@@ -1,14 +1,15 @@
 #include <lua.hpp>
+#include <windows.h>
 #include <stdio.h>
 #include <math.h>
 
+char g_strDebugInfo[10000] = "";
+char g_luaDebugInfo[1024] = "";
+char g_lua2DebugInfo[1024] = "";
+
 lua_State *L;
-float dt = 0.0;
-float gyro[3] = { 0.0, 0.0, 0.0 };
 float acc[3] = { 0.0, 0.0, 0.0 };
-double gpsd[2] = { 0.0, 0.0 };
-float gpsf[2] = { 0.0, 0.0 };
-float rx[10];
+float rx[39];
 
 int errorHandler(lua_State* L)
 {
@@ -33,120 +34,80 @@ int errorHandler(lua_State* L)
 
 void send()
 {
-    dt = 0.0166666666666667;
-
-    gyro[0] = 0.0;
-    gyro[1] = 0.0;
-    gyro[2] = 0.0;
-
-    // rotate gravity (0.0, 0.0, -9.81) to model
-    acc[0] = -9.81 * 0.0;
-    acc[1] = -9.81 * 0.0;
-    acc[2] = -9.81 * 1.0;
-    // add gravity to acc
-    acc[0] += 0.0;
-    acc[1] += 0.0;
-    acc[2] += 0.0;
-
-    static float gps_dt = 0.0;
-    if (gps_dt < 0.2) {
-        gps_dt += dt;
-    } else {
-        gps_dt = 0.0;
-        double lat = +0.01;
-        double lon = -0.01;
-        if ( (fabs(lat - gpsd[0]) > 0.0000001) or (fabs(lon - gpsd[1]) > 0.0000001) ) {
-            double lat1 = gpsd[0]   * M_PI / 180.0;
-            double lat2 = lat       * M_PI / 180.0;
-            double lon1 = gpsd[1]   * M_PI / 180.0;
-            double lon2 = lon       * M_PI / 180.0;
-            double dLon = lon2 - lon1;
-            double y = sin(dLon) * cos(lat2);
-            double x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon);
-            float head = atan2(y, x) * 180.0 / M_PI;
-
-            gpsd[0] = lat;
-            gpsd[1] = lon;
-            gpsf[0] = 0.0;
-            gpsf[1] = head;
-        }
-    };
-
-    // set global tables in Lua ----------------------------------------------------------------
     lua_getglobal(L, "RAW");
+
+    /* menu */
+    lua_pushstring(L, "menu");
+    lua_pushinteger(L, 999);
+    lua_rawset(L, -3);
+
+    /* dt*/
+    lua_pushstring(L, "dt");
+    lua_pushnumber(L, 0.016666666);
+    lua_rawset(L, -3);
+
+    /* model gyro */
+    lua_pushstring(L, "gyr");
+    lua_gettable(L, -2);
     {
-        /* dt*/
-        lua_pushstring(L, "dt");
-        lua_pushnumber(L, dt);
+        lua_pushstring(L, "x");
+        lua_pushnumber(L, 0.00001);
         lua_rawset(L, -3);
 
-        /* model gyro */
-        lua_pushstring(L, "gyro");
-        lua_gettable(L, -2);
-        {
-            lua_pushstring(L, "x");
-            lua_pushnumber(L, gyro[0]);
-            lua_rawset(L, -3);
+        lua_pushstring(L, "y");
+        lua_pushnumber(L, 0.00002);
+        lua_rawset(L, -3);
 
-            lua_pushstring(L, "y");
-            lua_pushnumber(L, gyro[1]);
-            lua_rawset(L, -3);
-
-            lua_pushstring(L, "z");
-            lua_pushnumber(L, gyro[2]);
-            lua_rawset(L, -3);
-        }
-        lua_pop(L, 1);
-
-        /* model acc */
-        lua_pushstring(L, "acc");
-        lua_gettable(L, -2);
-        {
-            lua_pushstring(L, "x");
-            lua_pushnumber(L, acc[0]);
-            lua_rawset(L, -3);
-
-            lua_pushstring(L, "y");
-            lua_pushnumber(L, acc[1]);
-            lua_rawset(L, -3);
-
-            lua_pushstring(L, "z");
-            lua_pushnumber(L, acc[2]);
-            lua_rawset(L, -3);
-        }
-        lua_pop(L, 1);
-
-        /* lat/lon/alt/head */
-        lua_pushstring(L, "gps");
-        lua_gettable(L, -2);
-        {
-            lua_pushstring(L, "lat");
-            lua_pushnumber(L, gpsd[0]);
-            lua_rawset(L, -3);
-
-            lua_pushstring(L, "lon");
-            lua_pushnumber(L, gpsd[1]);
-            lua_rawset(L, -3);
-
-            lua_pushstring(L, "alt");
-            lua_pushnumber(L, gpsf[0]);
-            lua_rawset(L, -3);
-
-            lua_pushstring(L, "head");
-            lua_pushnumber(L, gpsf[1]);
-            lua_rawset(L, -3);
-        }
-        lua_pop(L, 1);
+        lua_pushstring(L, "z");
+        lua_pushnumber(L, 0.00003);
+        lua_rawset(L, -3);
     }
     lua_pop(L, 1);
 
-    lua_getglobal(L, "TX");
+    /* model acc */
+    lua_pushstring(L, "acc");
+    lua_gettable(L, -2);
     {
-        for (int c = 0; c < 9; c++) {
-            lua_pushinteger(L, c);
-            lua_pushnumber(L, (float)c * 0.1);
-            lua_rawset(L, -3);
-        }
+        lua_pushstring(L, "x");
+        lua_pushnumber(L, 0.0);
+        lua_rawset(L, -3);
+
+        lua_pushstring(L, "y");
+        lua_pushnumber(L, 0.0);
+        lua_rawset(L, -3);
+
+        lua_pushstring(L, "z");
+        lua_pushnumber(L, -9.81);
+        lua_rawset(L, -3);
+    }
+    lua_pop(L, 1);
+
+    /* lat/lon/alt */
+    lua_pushstring(L, "gps");
+    lua_gettable(L, -2);
+    {
+        lua_pushstring(L, "lat");
+        lua_pushnumber(L, 58.5);
+        lua_rawset(L, -3);
+
+        lua_pushstring(L, "lon");
+        lua_pushnumber(L, 31.25);
+        lua_rawset(L, -3);
+
+        lua_pushstring(L, "alt");
+        lua_pushnumber(L, 22);
+        lua_rawset(L, -3);
+    }
+    lua_pop(L, 1);
+
+    lua_pop(L, 1);
+
+
+    lua_getglobal(L, "TX");
+    for (int i = 0; i < 39; i++) {
+        lua_pushinteger(L, i+1);
+        lua_pushnumber(L, (float)(i+1) * 0.01);
+        lua_rawset(L, -3);
     }
     lua_pop(L, 1);
 
@@ -161,18 +122,16 @@ void send()
 
 void recieve()
 {
-    float v1;
-    lua_getglobal(L, "FD");
-    {
-        lua_pushstring(L, "time");
-        lua_rawget(L, -2);
-        v1 = lua_tonumber(L, -1);
-        lua_pop(L, 1);
-    }
+    strcpy(g_luaDebugInfo, "no errors");
+    printf("1) %s\n", g_luaDebugInfo);
+
+    lua_getglobal(L, "DBGSTR");
+    strcpy(g_lua2DebugInfo, lua_tostring(L, -1));
     lua_pop(L, 1);
+    printf("2) %s\n", g_lua2DebugInfo);
 
     lua_getglobal(L, "RX");
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 39; i++) {
         lua_rawgeti(L, -1, i+1);
         rx[i] = lua_tonumber(L, -1);
         lua_pop(L, 1);
@@ -180,7 +139,6 @@ void recieve()
     lua_pop(L, 1);
 
 
-    printf("%f ", v1);
     printf("%+1.2f, %+1.2f, %+1.2f, %+1.2f %+1.2f ", rx[0], rx[1], rx[2], rx[3], rx[4]);
     printf("%+1.2f, %+1.2f, %+1.2f, %+1.2f %+1.2f ", rx[5], rx[6], rx[7], rx[8], rx[9]);
     printf("(%d)\n", lua_gettop(L));
@@ -201,9 +159,22 @@ int main(void)
     if (result) {
         printf("\nloadfile failed\n");
     } else {
+/*
         for (int i = 0; i < 6; i++) {
             send();
             recieve();
+        }
+*/
+        for (int i = 0; i < 6; i++) {
+            lua_getglobal(L, "next_resolution");
+            lua_pcall(L, 0, 4, 0);
+            int x = 111, y = 222, w = 333, h = 444;
+            x = lua_tointeger(L, 1);
+            y = lua_tointeger(L, 2);
+            w = lua_tointeger(L, 3);
+            h = lua_tointeger(L, 4);
+            lua_pop(L, 4);
+            printf("%d, %d, %d, %d (%d)\n", x, y, w, h, lua_gettop(L));
         }
     }
 
