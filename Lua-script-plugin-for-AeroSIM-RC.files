@@ -14,7 +14,8 @@ script.cpp
 
 lua/mod_correct_sensors.lua
 lua/lib_helpers.lua
-lua/mod_attitude.lua
+lua/mod_attitude_raw.lua
 firalgs.c
 lua/plugin_config.lua
 plugin.txt
+lua/mod_attitude_madgwick.lua

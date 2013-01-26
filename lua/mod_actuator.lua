@@ -1,19 +1,63 @@
 -- settings
 local resolution = 100      -- half
 
--- DR & reverse
-local mixer = { [1] = 1.0, [3] = 1.0 }
+-- input channels
+--           THR   AIL   PIT   RUD
+local tx = {  3,    1,    2,    4 }
 
+-- output channels
+local rx = { 31, 32, 33, 34, 12, 13, 27}
 
-function process_actuator()
-    for k, v in ipairs(mixer) do
-        MX[k] = MX[k] * v
+-- mixer matrix [#rx][#tx]
+local mx = {
+           { 1.0,  0.0, -0.4, -0.5 },
+           { 1.0, -0.4,  0.0,  0.5 },
+           { 1.0,  0.0,  0.4, -0.5 },
+           { 1.0,  0.4,  0.0,  0.5 },
+           { 0.0,  0.0,  0.0, -0.5 },
+           { 0.0,  0.0,  0.5,  0.0 },
+           { 0.0,  0.5,  0.0,  0.0 }
+}
+--[[
+^ front
+!       31
+!       O
+!  34 O   O 32
+!       O
+!       33     right
++------------------>
+]]
+
+function actuator_pre_mixer()
+    for k, v in ipairs(tx) do
+        MX[v] = TX[v]
     end
+end
 
-    for i = 1, 39 do
-        local s = MX[i]
-        s = math.floor(s * resolution ) / resolution
-        RX[i] = s
+function actuator_mixer()
+    for k, mxs in ipairs(mx) do
+        local ch = 0.0
+
+        for n, m in ipairs(mxs) do
+            ch = ch + MX[tx[n]] * m
+        end
+
+        RX[rx[k]] = ch
+
+        if RX[rx[k]] > 1.0 then
+            RX[rx[k]] = 1.0
+        elseif RX[rx[k]] < -1.0 then
+            RX[rx[k]] = -1.0
+        end
+    end
+end
+
+
+function actuator_post_mixer()
+    for _, v in ipairs(rx) do
+        local s = RX[v]
+        s = (math.floor(s * resolution)) / resolution
+        RX[v] = s
     end
 end
 

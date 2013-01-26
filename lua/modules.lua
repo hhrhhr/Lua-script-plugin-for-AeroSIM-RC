@@ -1,4 +1,5 @@
 require("mod_correct_sensors")
-require("mod_attitude")
+require("mod_attitude_raw")
+require("mod_attitude_madgwick")
 require("mod_stabilizer")
 require("mod_actuator")

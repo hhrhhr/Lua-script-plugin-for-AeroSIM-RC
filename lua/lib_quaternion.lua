@@ -12,7 +12,7 @@ function Quaternion.__add(a, b)
     local y = a.y + b.y
     local z = a.z + b.z
     local w = a.w + b.w
-    return Quaternion:new(x, y, z)
+    return Quaternion:new(x, y, z, w)
 end
 
 function Quaternion.__sub(a, b)
@@ -20,7 +20,7 @@ function Quaternion.__sub(a, b)
     local y = a.y - b.y
     local z = a.z - b.z
     local w = a.w - b.w
-    return Quaternion:new(x, y, z)
+    return Quaternion:new(x, y, z, w)
 end
 
 function Quaternion.__mul(a, b)
@@ -28,19 +28,7 @@ function Quaternion.__mul(a, b)
     local y = a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x
     local z = a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w
     local w = a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z
---[[
-    -- from Qt
-    local ww = (a.z+a.x)*(b.x+b.y)
-    local yy = (a.w-a.y)*(b.w+b.z)
-    local zz = (a.w+a.y)*(b.w-b.z)
-    local xx = ww + yy + zz
-    local qq = 0.5 * (xx + (a.z-a.x)*(b.x-b.y))
 
-    local w = qq-ww+(a.z-a.y)*(b.y-b.z)
-    local x = qq-xx+(a.x+a.w)*(b.x+b.w)
-    local y = qq-yy+(a.w-a.x)*(b.y+b.z)
-    local z = qq-zz+(a.z+a.y)*(b.w-b.x)
---]]
     return Quaternion:new(x, y, z, w)
 end
 
@@ -78,13 +66,32 @@ function Quaternion:scale(s)
     self.w = self.w * s
 end
 
+function Quaternion:mul(s)
+    local x = self.x * s
+    local y = self.y * s
+    local z = self.z * s
+    local w = self.w * s
+    return Quaternion:new(x, y, z, w)
+end
+
 function Quaternion:norm()
     self:scale(1 / self:mag())
 end
 
 function Quaternion:map_vector(v)
-    local q = self * Quaternion(v.x, v.y, v.z, 0.0) * -self
-    return Vector3D(q.x, q.y, q.z)
+--    local q = self * Quaternion(v.x, v.y, v.z, 0.0) * -self
+    local a = self
+    local w = -a.x*v.x - a.y*v.y - a.z*v.z
+    local x =  a.w*v.x + a.y*v.z - a.z*v.y
+    local y =  a.w*v.y - a.x*v.z + a.z*v.x
+    local z =  a.w*v.z + a.x*v.y - a.y*v.x
+
+    local o = Vector3D()
+    o.x = -w*a.x + x*a.w - y*a.z + z*a.y
+    o.y = -w*a.y + x*a.z + y*a.w - z*a.x
+    o.z = -w*a.z - x*a.y + y*a.x + z*a.w
+
+    return o
 end
 
 function Quaternion:from_euler(roll, pitch, yaw)
@@ -139,7 +146,9 @@ function Quaternion:to_euler()
         y = 2 * (q.x * q.w - q.y * q.z)
         x = -xx + yy - zz + ww
         roll = math.atan2(y, x)
+
         pitch = math.asin(2 * test / unit)
+
         y = 2 * (q.y * q.w - q.x * q.z)
         x = xx - yy - zz + ww
         yaw = math.atan2(y, x)

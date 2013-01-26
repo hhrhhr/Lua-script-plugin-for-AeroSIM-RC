@@ -1,8 +1,8 @@
 DEG2RAD = math.pi / 180.0
 RAD2DEG = 180.0 / math.pi
-M_2_PI     = math.pi * 2.0
-M_PI_2    = math.pi / 2.0
-M_PI_4    = math.pi / 4.0
+M_2_PI  = math.pi * 2.0
+M_PI_2  = math.pi / 2.0
+M_PI_4  = math.pi / 4.0
 
 function copysign(x, y)
     if ((x < 0 and y > 0) or (x > 0 and y < 0)) then
@@ -10,10 +10,6 @@ function copysign(x, y)
     else
         return x;
     end
-end
-
-function null_function()
-    local value = nil
 end
 
 

@@ -54,11 +54,7 @@ local function process_gps()
     end
 end
 
-function correct_matrix()
-    -- used <- raw
-    -- X    <- Y
-    -- Y    <- Z
-    -- Z    <- X
+local function correct_matrix()
     FD.mat:set( M[5], M[8], M[2],
                 M[6], M[9], M[3],
                 M[4], M[7], M[1] )

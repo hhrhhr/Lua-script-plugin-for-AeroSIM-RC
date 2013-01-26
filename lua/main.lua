@@ -59,37 +59,42 @@ function main()     -- main loop, called every frame
     dbg("gyr x:% 10.6f, y:% 10.6f, z:% 10.6f", RAW.gyr.x, RAW.gyr.y, RAW.gyr.z)
     dbg("acc x:% 10.6f, y:% 10.6f, z:% 10.6f", RAW.acc.x, RAW.acc.y, RAW.acc.z)
     dbg("lat: % f, lon: % f", RAW.gps.lat, RAW.gps.lon)
-    dbg("alt: %.2f head: %.2f", RAW.gps.alt, RAW.gps.head)
+    dbg("alt: %.2f head: %.2f\n", RAW.gps.alt, RAW.gps.head)
 
-    -- pre mixer
-    for i = 1, 39 do
-        MX[i] = TX[i]
-    end
-
-    calculate_attitude_matrix()
-    dbg("matrix RPY: % 7.2f, % 7.2f, % 7.2f", FD.att.roll, FD.att.pitch, FD.att.yaw)
-
-    calculate_attitude_quat()
-    dbg("  quat RPY: % 7.2f, % 7.2f, % 7.2f", FD.att.roll, FD.att.pitch, FD.att.yaw)
-
-    calculate_attitude_raw()
+    attitude_calculate_raw()
     dbg("   raw RPY: % 7.2f, % 7.2f, % 7.2f", FD.att.roll, FD.att.pitch, FD.att.yaw)
 
-    MadgwickAHRSupdateIMU()
-    dbg("\n!!AHRS RPY: % 7.2f, % 7.2f, % 7.2f\n", FD.att.roll, FD.att.pitch, FD.att.yaw)
+    attitude_MadgwickAHRSupdateIMU()
+    dbg("!!AHRS RPY: % 7.2f, % 7.2f, % 7.2f", FD.att.roll, FD.att.pitch, FD.att.yaw)
 
 
-    -- TX[23] - Plugin channel 1
+    actuator_pre_mixer()
+
+    -- Plugin channel 1
     if TX[23] > 0.333 then          -- function #1
+        dbg("MODE : angular velocity locked")
         angular_velocity_lock()
     elseif TX[23] > -0.333 then     -- function #2
-        null_function()
+        dbg("MODE : direct control")
     else                            -- function #3
-        null_function()
+        dbg("MODE : attitude lock")
+        attitude_lock()
+        angular_velocity_lock()
     end
 
-    -- example actuator
-    process_actuator()
+    -- Plugin channel 2
+    if TX[24] > 0.333 then          -- function #4
+        --
+    elseif TX[24] > -0.333 then     -- function #5
+        --
+    else                            -- function #6
+        --
+    end
+
+    actuator_mixer()
+
+    actuator_post_mixer()
+
 
 -- end of user code ------------------------------------------------------/
 

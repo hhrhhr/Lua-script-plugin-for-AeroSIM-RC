@@ -61,6 +61,13 @@ function Vector3D:scale(s)
     self.z = self.z * s
 end
 
+function Vector3D:mul(s)
+    local x = self.x * s
+    local y = self.y * s
+    local z = self.z * s
+    return Vector3D:new(x, y, z)
+end
+
 function Vector3D:norm()
     self:scale(1 / self:len())
 end
